@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Chatbot</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+  <style>
+    #chatbot {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 300px;
+      height: 400px;
+      background: white;
+      border: 2px solid #ccc;
+      border-radius: 10px;
+      display: none;
+      flex-direction: column;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    #chatbot-header {
+      background: #0044cc;
+      color: white;
+      padding: 10px;
+      text-align: center;
+      border-radius: 10px 10px 0 0;
+    }
+
+    #chatbot-messages {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+    }
+
+    #chatbot-input {
+      display: flex;
+      padding: 10px;
+    }
+
+    #chatbot-input input {
+      flex: 1;
+      padding: 5px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+
+    #chatbot-input button {
+      margin-left: 5px;
+      padding: 5px 10px;
+      background: #0044cc;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    #chatbot-toggle {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #0044cc;
+      color: white;
+      border: none;
+      padding: 10px;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <button id="chatbot-toggle">💬</button>
+  <div id="chatbot">
+    <div id="chatbot-header">Inspection Scheduler</div>
+    <div id="chatbot-messages"></div>
+    <div id="chatbot-input">
+      <input type="text" id="user-input" placeholder="Type your message...">
+      <button id="send-button">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const chatbotToggle = document.getElementById('chatbot-toggle');
+    const chatbot = document.getElementById('chatbot');
+    const messages = document.getElementById('chatbot-messages');
+    const userInput = document.getElementById('user-input');
+
+    chatbotToggle.addEventListener('click', () => {
+      chatbot.style.display = chatbot.style.display === 'none' ? 'flex' : 'none';
+    });
+
+    document.getElementById('send-button').addEventListener('click', async () => {
+      const message = userInput.value.trim();
+      if (!message) return;
+
+      // Append user message
+      const userMessage = document.createElement('div');
+      userMessage.textContent = `You: ${message}`;
+      messages.appendChild(userMessage);
+
+      // Call backend API
+      try {
+        const response = await fetch('http://localhost:3000/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message }),
+        });
+
+        const data = await response.json();
+
+        // Append bot response
+        const botMessage = document.createElement('div');
+        botMessage.textContent = `Bot: ${data.response}`;
+        messages.appendChild(botMessage);
+
+        messages.scrollTop = messages.scrollHeight;
+        userInput.value = '';
+      } catch (error) {
+        console.error('Error connecting to the backend:', error);
+        const errorMessage = document.createElement('div');
+        errorMessage.textContent = 'Bot: Sorry, there was an issue connecting to the backend.';
+        messages.appendChild(errorMessage);
+      }
+    });
+  </script>
+</body>
+</html>
