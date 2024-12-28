@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Chatbot</title>
-  <link rel="icon" href="favicon.ico" type="image/x-icon">
   <style>
     #chatbot {
       position: fixed;
@@ -72,7 +71,7 @@
 <body>
   <button id="chatbot-toggle">💬</button>
   <div id="chatbot">
-    <div id="chatbot-header">Inspection Scheduler</div>
+    <div id="chatbot-header">Chat with Us</div>
     <div id="chatbot-messages"></div>
     <div id="chatbot-input">
       <input type="text" id="user-input" placeholder="Type your message...">
@@ -86,6 +85,8 @@
     const messages = document.getElementById('chatbot-messages');
     const userInput = document.getElementById('user-input');
 
+    const userId = 'unique-user-id'; // Generate a unique ID for each user session
+
     chatbotToggle.addEventListener('click', () => {
       chatbot.style.display = chatbot.style.display === 'none' ? 'flex' : 'none';
     });
@@ -94,34 +95,32 @@
       const message = userInput.value.trim();
       if (!message) return;
 
-      // Append user message
+      // Append user message to the chat
       const userMessage = document.createElement('div');
       userMessage.textContent = `You: ${message}`;
       messages.appendChild(userMessage);
 
-      // Call backend API
+      // Send user message to the backend
       try {
         const response = await fetch('http://localhost:3000/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message }),
+          body: JSON.stringify({ userId, message }),
         });
 
         const data = await response.json();
 
-        // Append bot response
+        // Append bot response to the chat
         const botMessage = document.createElement('div');
         botMessage.textContent = `Bot: ${data.response}`;
         messages.appendChild(botMessage);
 
         messages.scrollTop = messages.scrollHeight;
-        userInput.value = '';
       } catch (error) {
-        console.error('Error connecting to the backend:', error);
-        const errorMessage = document.createElement('div');
-        errorMessage.textContent = 'Bot: Sorry, there was an issue connecting to the backend.';
-        messages.appendChild(errorMessage);
+        console.error('Error communicating with the backend:', error);
       }
+
+      userInput.value = '';
     });
   </script>
 </body>
