@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Chatbot</title>
   <style>
+    body {
+      font-family: Arial, sans-serif;
+    }
+
     #chatbot {
       position: fixed;
       bottom: 20px;
@@ -17,20 +21,110 @@
       display: none;
       flex-direction: column;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+
+    #chatbot.open {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeOut {
+      from {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      to {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+    }
+
+    #chatbot.hidden {
+      animation: fadeOut 0.3s ease-out forwards;
     }
 
     #chatbot-header {
-      background: #0044cc;
+      background: #00a86b; /* Jade Green */
       color: white;
       padding: 10px;
       text-align: center;
       border-radius: 10px 10px 0 0;
+      position: relative;
+    }
+
+    #close-button {
+      position: absolute;
+      top: 5px;
+      right: 10px;
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
     }
 
     #chatbot-messages {
       flex: 1;
       padding: 10px;
       overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .message {
+      max-width: 80%;
+      padding: 8px 12px;
+      border-radius: 15px;
+      line-height: 1.4;
+      word-wrap: break-word;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: slideIn 0.3s forwards;
+    }
+
+    .user-message {
+      align-self: flex-end;
+      background-color: #00a86b; /* Jade Green */
+      color: white;
+      border-top-right-radius: 0;
+    }
+
+    .bot-message {
+      align-self: flex-start;
+      background-color: #e0e0e0;
+      color: black;
+      border-top-left-radius: 0;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    #chatbot-divider {
+      height: 1px;
+      background: #ccc;
+      margin: 0;
     }
 
     #chatbot-input {
@@ -48,18 +142,23 @@
     #chatbot-input button {
       margin-left: 5px;
       padding: 5px 10px;
-      background: #0044cc;
+      background: #00a86b; /* Jade Green */
       color: white;
       border: none;
       border-radius: 5px;
       cursor: pointer;
     }
 
+    #chatbot-input button:disabled {
+      background: #cccccc;
+      cursor: not-allowed;
+    }
+
     #chatbot-toggle {
       position: fixed;
       bottom: 20px;
       right: 20px;
-      background: #0044cc;
+      background: #00a86b; /* Jade Green */
       color: white;
       border: none;
       padding: 10px;
@@ -69,38 +168,88 @@
   </style>
 </head>
 <body>
-  <button id="chatbot-toggle">💬</button>
-  <div id="chatbot">
-    <div id="chatbot-header">Chat with Us</div>
+  <div id="chatbot" class="hidden">
+    <div id="chatbot-header">
+      Chat with Us
+      <button id="close-button">X</button>
+    </div>
     <div id="chatbot-messages"></div>
+    <div id="chatbot-divider"></div>
     <div id="chatbot-input">
       <input type="text" id="user-input" placeholder="Type your message...">
-      <button id="send-button">Send</button>
+      <button id="send-button" disabled>Send</button>
     </div>
   </div>
+  <button id="chatbot-toggle">💬</button>
 
   <script>
-    const chatbotToggle = document.getElementById('chatbot-toggle');
     const chatbot = document.getElementById('chatbot');
+    const chatbotToggle = document.getElementById('chatbot-toggle');
+    const closeButton = document.getElementById('close-button');
     const messages = document.getElementById('chatbot-messages');
     const userInput = document.getElementById('user-input');
+    const sendButton = document.getElementById('send-button');
 
-    const userId = 'unique-user-id'; // Generate a unique ID for each user session
+    const userId = 'unique-user-id';
+    let isBotResponding = false;
+    let hasInitialMessageSent = false;
 
-    chatbotToggle.addEventListener('click', () => {
-      chatbot.style.display = chatbot.style.display === 'none' ? 'flex' : 'none';
+    // Open chat on page load with animation
+    window.addEventListener('load', () => {
+      setTimeout(() => showChat(), 300); // Add delay to play opening animation
     });
 
-    document.getElementById('send-button').addEventListener('click', async () => {
+    const showChat = () => {
+      chatbot.classList.remove('hidden');
+      chatbot.classList.add('open');
+      chatbot.style.display = 'flex';
+      chatbotToggle.style.display = 'none';
+
+      if (!hasInitialMessageSent) {
+        const initialBotMessage = document.createElement('div');
+        initialBotMessage.textContent = "Hello! Are you looking for a new inspection or do you have questions on an already completed report?";
+        initialBotMessage.className = 'message bot-message';
+        messages.appendChild(initialBotMessage);
+        messages.scrollTo({ top: messages.scrollHeight, behavior: 'smooth' });
+
+        toggleInputState(true);
+        hasInitialMessageSent = true;
+      }
+    };
+
+    const hideChat = () => {
+      chatbot.classList.remove('open');
+      chatbot.classList.add('hidden');
+      setTimeout(() => {
+        chatbot.style.display = 'none';
+        chatbotToggle.style.display = 'block';
+      }, 300); // Match the animation duration
+    };
+
+    const toggleInputState = (enabled) => {
+      sendButton.disabled = !enabled;
+    };
+
+    const scrollToLatestMessage = () => {
+      messages.scrollTo({
+        top: messages.scrollHeight,
+        behavior: 'smooth',
+      });
+    };
+
+    const sendMessage = async () => {
       const message = userInput.value.trim();
-      if (!message) return;
+      if (!message || isBotResponding) return;
 
-      // Append user message to the chat
+      isBotResponding = true;
+      toggleInputState(false);
+
       const userMessage = document.createElement('div');
-      userMessage.textContent = `You: ${message}`;
+      userMessage.textContent = message;
+      userMessage.className = 'message user-message';
       messages.appendChild(userMessage);
+      scrollToLatestMessage();
 
-      // Send user message to the backend
       try {
         const response = await fetch('http://localhost:3000/chat', {
           method: 'POST',
@@ -110,17 +259,32 @@
 
         const data = await response.json();
 
-        // Append bot response to the chat
         const botMessage = document.createElement('div');
-        botMessage.textContent = `Bot: ${data.response}`;
+        botMessage.textContent = data.response;
+        botMessage.className = 'message bot-message';
         messages.appendChild(botMessage);
 
-        messages.scrollTop = messages.scrollHeight;
+        scrollToLatestMessage();
       } catch (error) {
         console.error('Error communicating with the backend:', error);
+      } finally {
+        isBotResponding = false;
+        toggleInputState(true);
       }
 
-      userInput.value = '';
+      userInput.value = ''; // Reset the input but allow typing while bot responds
+    };
+
+    // Event listeners for chat open/close
+    chatbotToggle.addEventListener('click', showChat);
+    closeButton.addEventListener('click', hideChat);
+
+    // Event listeners for sending messages
+    sendButton.addEventListener('click', sendMessage);
+    userInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        sendMessage();
+      }
     });
   </script>
 </body>
