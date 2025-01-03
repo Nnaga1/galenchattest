@@ -1,4 +1,5 @@
 const express = require('express');
+const axios = require('axios');
 const bodyParser = require('body-parser');
 const { OpenAI } = require('openai');
 const cors = require('cors');
@@ -123,32 +124,13 @@ Divinity Inspection Service: “Thank you for trusting Divinity Inspection Servi
 # Notes
 If the user is not in the specified counties, is looking for a commercial property inspection, or is looking for an existing report, end the chat and keep on directing the user to call Divinity Inspection Service during business hours, 9AM to 5PM EST at 410-227-3983.
 Make sure to clarify the county the user is in if you are not sure.
-If you reach step 15 or meet any of the conditions in step 6, or in other words, when you’ve either confirmed the user’s appointment or have told the user that Divinity will call them back during business hours, and the chat is functionally over, make sure to say, at the end of that phrase: “Have a great day!”
-`;
+If you reach step 15 or meet any of the conditions in step 6, or in other words, when you’ve either confirmed the user’s appointment or have told the user that Divinity will call them back during business hours, and the chat is functionally over, make sure to say, at the end of that phrase: “Have a great day!”`
+;
 
 const DEFAULT_CALENDAR_ID = 'aeb6qgcnttg1@gmail.com'; // Replace with your custom Calendar ID if needed
 
 // Initialize conversation history object
 const conversationHistory = {};
-
-// Define headers for Google Sheets
-const sheetHeaders = [
-  'Name',
-  'Email',
-  'Phone Number',
-  'County',
-  'Residential?',
-  'New Inspection?',
-  'Qualified?',
-  'Address',
-  'Square Footage',
-  'Hours',
-  'Services Requested',
-  'Appointment',
-  'Invoice Price',
-  'Payment Status',
-  'Transcript',
-];
 
 // Append data to Google Sheets
 async function appendToSheet(rowData) {
@@ -158,8 +140,8 @@ async function appendToSheet(rowData) {
   try {
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: 'Sheet1!A1',
-      valueInputOption: 'RAW',
+      range: 'Sheet1!A2', // Assumes you want to append to the first sheet starting from row 2 (assuming row 1 is headers)
+      valueInputOption: 'RAW',  // You can use 'RAW' or 'USER_ENTERED' depending on how you want the data to be entered
       resource,
     });
     console.log('Data appended to Google Sheet.');
@@ -168,34 +150,34 @@ async function appendToSheet(rowData) {
   }
 }
 
-// Create a Google Calendar event
-async function createCalendarEvent(dateTime, summary, description, attendees = [], calendarId = DEFAULT_CALENDAR_ID) {
-  const event = {
-    summary,
-    description,
-    start: {
-      dateTime,
-      timeZone: 'America/New_York',
-    },
-    end: {
-      dateTime: new Date(new Date(dateTime).getTime() + 3600000).toISOString(), // 1-hour event
-      timeZone: 'America/New_York',
-    },
-    attendees: attendees.map((email) => ({ email })),
-  };
+// // Create a Google Calendar event
+// async function createCalendarEvent(dateTime, summary, description, attendees = [], calendarId = DEFAULT_CALENDAR_ID) {
+//   const event = {
+//     summary,
+//     description,
+//     start: {
+//       dateTime,
+//       timeZone: 'America/New_York',
+//     },
+//     end: {
+//       dateTime: new Date(new Date(dateTime).getTime() + 3600000).toISOString(), // 1-hour event
+//       timeZone: 'America/New_York',
+//     },
+//     attendees: attendees.map((email) => ({ email })),
+//   };
 
-  try {
-    const response = await calendar.events.insert({
-      calendarId,
-      resource: event,
-    });
-    console.log('Event created:', response.data.htmlLink);
-    return response.data.htmlLink; // Returns the event link
-  } catch (error) {
-    console.error('Error creating calendar event:', error);
-    return null;
-  }
-}
+//   try {
+//     const response = await calendar.events.insert({
+//       calendarId,
+//       resource: event,
+//     });
+//     console.log('Event created:', response.data.htmlLink);
+//     return response.data.htmlLink; // Returns the event link
+//   } catch (error) {
+//     console.error('Error creating calendar event:', error);
+//     return null;
+//   }
+// }
 
 // Chat endpoint to handle user messages
 app.post('/chat', async (req, res) => {
@@ -210,27 +192,11 @@ app.post('/chat', async (req, res) => {
     if (!conversationHistory[userId]) {
       conversationHistory[userId] = {
         transcript: [],
-        userData: {
-          Name: '',
-          Email: '',
-          'Phone Number': '',
-          County: '',
-          'Residential?': '',
-          'New Inspection?': '',
-          'Qualified?': '',
-          Address: '',
-          'Square Footage': '',
-          Hours: '',
-          'Services Requested': '',
-          Appointment: '',
-          'Invoice Price': '',
-          'Payment Status': '',
-        },
         hasScheduledAppointment: false,
         hasAskedConfirmation: false,
         isConversationComplete: false,
-        conversationLocked: false, // Prevent further input
-        chat_log_stored: '', // Variable to store the full chat log
+        conversationLocked: false,
+        chat_log_stored: '',
       };
       conversationHistory[userId].transcript.push({ role: 'system', content: SYSTEM_ROLE });
     }
@@ -239,45 +205,28 @@ app.post('/chat', async (req, res) => {
 
     // Check if the conversation is locked
     if (userSession.conversationLocked) {
-      console.log(`User ${userId} attempted input after conversation locked.`);
+      // console.log(User ${userId} attempted input after conversation locked.);
       return res.status(400).json({ response: 'Conversation has ended. No further input is allowed.' });
     }
 
     userSession.transcript.push({ role: 'user', content: message });
 
-    // Debugging log for current state
-    console.log(`Current State for User ${userId}:`, {
-      hasAskedConfirmation: userSession.hasAskedConfirmation,
-      hasScheduledAppointment: userSession.hasScheduledAppointment,
-    });
-
     // If the user confirms the conversation is complete
     if (message.toLowerCase() === 'yes' && userSession.hasAskedConfirmation) {
       console.log('Condition met for completing conversation:');
-      console.log('Message:', message);
-      console.log('HasAskedConfirmation:', userSession.hasAskedConfirmation);
 
       // Store the final chat log
       userSession.chat_log_stored = userSession.transcript
-        .map((entry) => `${entry.role}: ${entry.content}`)
+        .map((entry) => `${entry.role} : ${entry.content}`)
         .join('\n');
 
-      // Append data to Google Sheets
-      const rowData = Object.values(userSession.userData);
-      rowData.push(userSession.chat_log_stored);
-
-      await appendToSheet(rowData);
-
-      // Create a calendar event if an appointment is scheduled
-      let eventResponse = '';
-      if (userSession.userData.Appointment) {
-        const eventLink = await createCalendarEvent(
-          userSession.userData.Appointment,
-          'Home Inspection Appointment',
-          'Scheduled via AI Chatbot',
-          [userSession.userData.Email]
-        );
-        eventResponse = ` Your appointment has been scheduled. Here is the event link: ${eventLink}`;
+      // Send conversation to the /save-conversation endpoint
+      try {
+        await axios.post('http://localhost:3000/save-conversation', {
+          transcript: userSession.transcript,
+        });
+      } catch (error) {
+        console.error('Error sending conversation to /save-conversation:', error);
       }
 
       // Lock the conversation
@@ -287,24 +236,8 @@ app.post('/chat', async (req, res) => {
       console.log(`Complete Transcript for User ${userId}:\n${userSession.chat_log_stored}`);
 
       return res.json({
-        response: `Thank you! Your details have been recorded.${eventResponse} Goodbye!`,
+        response: `Thank you! Your details have been recorded. Goodbye!`,
       });
-    }
-
-    // Transition to the confirmation phase after scheduling
-    if (userSession.hasScheduledAppointment && !userSession.hasAskedConfirmation) {
-      console.log('Transitioning to confirmation phase...');
-      const summaryMessage =
-        'Here is a summary of your information:\n\n' +
-        Object.entries(userSession.userData)
-          .map(([key, value]) => `${key}: ${value || 'N/A'}`)
-          .join('\n') +
-        '\n\nIs this everything? Reply "yes" to confirm and complete the conversation.';
-      userSession.hasAskedConfirmation = true; // Set flag to true
-      userSession.transcript.push({ role: 'assistant', content: summaryMessage });
-
-      console.log(`Summary sent to User ${userId}: ${summaryMessage}`);
-      return res.json({ response: summaryMessage });
     }
 
     // Handle conversational AI interaction
@@ -318,7 +251,13 @@ app.post('/chat', async (req, res) => {
     // Detect if the bot sends "Have a great day!"
     if (response.toLowerCase().includes('have a great day!')) {
       userSession.conversationLocked = true; // Lock the conversation
-      console.log("HAHAHA", userSession.transcript);
+      try {
+        await axios.post('http://localhost:3000/save-conversation', {
+          transcript: userSession.transcript,
+        });
+      } catch (error) {
+        console.error('Error sending conversation to /save-conversation:', error);
+      }
       console.log(`Conversation locked for User ${userId} after "Have a great day!"`);
     }
 
@@ -330,6 +269,78 @@ app.post('/chat', async (req, res) => {
   } catch (error) {
     console.error('Error:', error.response?.data || error.message);
     res.status(500).json({ response: 'Internal server error' });
+  }
+});
+
+// New endpoint to handle transcript data for Google Sheets and Calendar
+app.post('/save-conversation', async (req, res) => {
+  const { transcript } = req.body;
+  if (!transcript) {
+    return res.status(400).json({ response: 'Missing transcript' });
+  }
+
+  try {
+    // Send the transcript to GPT to extract user data
+    const prompt = 
+      `Extract the following details from the conversation:
+      - Name
+      - Email
+      - Phone Number
+      - County
+      - Residential? (Yes/No)
+      - New Inspection? (Yes/No)
+      - Qualified? (Yes/No)
+      - Address
+      - Square Footage
+      - Hours
+      - Services Requested
+      - Appointment
+      - Invoice Price
+      - Payment Status
+
+      Transcript:
+      ${transcript.map(entry => entry.content).join('\n')}
+
+      Please provide the extracted data in JSON format, like so:
+      {
+        "Name": "John Doe",
+        "Email": "john.doe@example.com",
+        "Phone Number": "123-456-7890",
+        "County": "Hillsborough",
+        "Residential?": "Yes",
+        "New Inspection?": "Yes",
+        "Qualified?": "Yes",
+        "Address": "123 Main St",
+        "Square Footage": "2500",
+        "Hours": "3",
+        "Services Requested": "Home Inspection",
+        "Appointment": "2025-01-01 14:00:00",
+        "Invoice Price": "$300",
+        "Payment Status": "Paid"
+      }`
+    ;
+
+    const aiResponse = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [{ role: 'system', content: prompt }],
+    });
+
+    const extractedData = JSON.parse(aiResponse.choices[0].message.content);
+
+    // Convert the extracted data into a row for Google Sheets
+    const rowData = Object.values(extractedData);
+    rowData.push(transcript.map(entry => entry.content).join('\n')); // Append the full transcript
+
+    // Call the function to append the row data to Google Sheets
+    await appendToSheet(rowData);
+
+    // Return success message
+    res.json({
+      response: 'Conversation saved successfully!',
+    });
+  } catch (error) {
+    console.error('Error saving conversation:', error);
+    res.status(500).json({ response: 'Internal server error while saving conversation' });
   }
 });
 
